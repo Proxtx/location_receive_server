@@ -139,7 +139,7 @@ impl<'a> LocationWriter<'a> {
             updated_data,
         );
 
-        self.file.write_file(current_file.0, current_file).await
+        self.file.write_file(current_file.0, current_file.1).await
     }
 }
 
