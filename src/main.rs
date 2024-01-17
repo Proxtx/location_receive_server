@@ -30,37 +30,34 @@ struct LocationSnapshot {
     address: String,
 }
 struct LocationWriter<'a> {
-    file: ManagedFile<'a, LocationFile>,
+    file: ManagedFile<'a>,
 }
 
 impl<'a> LocationWriter<'a> {
     pub fn new(directory: &'a Path, duration: Duration) -> LocationWriter {
         LocationWriter {
-            file: ManagedFile::new::<LocationFile>(directory, duration),
+            file: ManagedFile::new(directory, duration),
         }
     }
 }
 
-struct ManagedFile<'a, T>
-where
-    T: DeserializeOwned,
-{
+struct ManagedFile<'a> {
     directory: &'a Path,
     duration: Duration,
 }
 
-impl<'a, T> ManagedFile<'a, T>
-where
-    T: DeserializeOwned,
-{
-    pub fn new(directory: &'a Path, duration: Duration) -> ManagedFile<T> {
-        ManagedFile::<T> {
+impl<'a> ManagedFile<'a> {
+    pub fn new(directory: &'a Path, duration: Duration) -> ManagedFile {
+        ManagedFile {
             directory,
             duration,
         }
     }
 
-    async fn read_latest_file(&mut self) -> FileResult<Option<T>> {
+    async fn read_latest_file<T>(&mut self) -> FileResult<Option<T>>
+    where
+        T: DeserializeOwned,
+    {
         let newest_file = self.get_newest_file().await?;
         let mut content = String::new();
         Ok(match newest_file {
