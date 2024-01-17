@@ -20,7 +20,7 @@ fn main() {
     rocket::build().manage(LocationWriter::new(directory, duration));
 }
 
-type LocationFile = Vec<(String, LocationSnapshot)>;
+type LocationFile = Vec<(String, LocationsSnapshot)>;
 type LocationsSnapshot = Vec<(String, LocationSnapshot)>;
 
 #[derive(Deserialize)]
