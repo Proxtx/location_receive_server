@@ -1,265 +1,71 @@
-use std::time::UNIX_EPOCH;
-
-use serde::Serialize;
-use tokio::io::AsyncWriteExt;
-
+mod config;
 mod error;
+mod file;
 
-use {
-    error::{FileError, FileResult},
-    serde::de::DeserializeOwned,
-    serde::Deserialize,
-    std::{
-        collections::HashMap,
-        path::{Path, PathBuf},
-        time::{Duration, SystemTime},
-    },
-    tokio::{
-        fs::{self, File as TokioFile, OpenOptions},
-        io::AsyncReadExt,
-    },
-};
+use config::Config;
+use config::Place;
+use error::ServerResult;
+use file::LocationSnapshot;
+use file::LocationWriter;
+use geoutils::Distance;
+use geoutils::Location;
+use rocket::http::Status;
+use rocket::{get, routes, State};
+use std::path::Path;
 
 #[tokio::main]
 async fn main() {
-    let lw_writer = LocationWriter::new(
-        Path::new("example/locations/"),
-        std::time::Duration::from_secs(1000 * 60 * 60 * 12),
-    );
-
-    let t = lw_writer
-        .file
-        .read_latest_file::<LocationFile>()
+    rocket::build()
+        .manage(LocationWriter::new(
+            Path::new("example/locations"),
+            std::time::Duration::from_secs(1000 * 60 * 60 * 12),
+        ))
+        .manage(Config::load().await.unwrap())
+        .mount("/", routes![location_update])
+        .launch()
         .await
-        .unwrap()
         .unwrap();
-    println!("{:?}", t);
-
-    rocket::build().manage(LocationWriter::new(
-        Path::new("example/locations"),
-        std::time::Duration::from_secs(1000 * 60 * 60 * 12),
-    ));
 }
 
-trait InitializeFile {
-    fn init() -> Self;
-}
-
-trait TimedFile<T> {
-    fn get_latest_data(&self) -> FileResult<Option<&T>>;
-    fn received_new_data(&mut self, data: T);
-}
-
-type LocationFile = HashMap<String, LocationsSnapshot>;
-impl InitializeFile for LocationFile {
-    fn init() -> Self {
-        HashMap::new()
+#[get("/location-update/<pwd>/<user_id>/<lat>/<long>")]
+async fn location_update(
+    pwd: &str,
+    user_id: &str,
+    lat: f64,
+    long: f64,
+    writer: &State<LocationWriter>,
+    config: &State<Config>,
+) -> Status {
+    if pwd != config.password {
+        return Status::Unauthorized;
     }
-}
 
-impl TimedFile<LocationsSnapshot> for LocationFile {
-    fn get_latest_data(&self) -> FileResult<Option<&LocationsSnapshot>> {
-        let mut biggest: Option<u64> = None;
-        for key in self.keys() {
-            match biggest {
-                None => {
-                    biggest = Some(key.parse()?);
-                }
-                Some(v) => {
-                    let key = key.parse::<u64>()?;
-                    if key > v {
-                        biggest = Some(key);
-                    }
-                }
-            }
+    let place = match is_at_place(config, lat.clone(), long.clone()) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("Server error occurred: {}", e);
+            return Status::InternalServerError;
         }
+    };
 
-        Ok(match biggest {
-            None => None,
-            Some(k) => Some(self.get(&k.to_string()).unwrap()),
-        })
-    }
+    let place = match place {
+        Some(v) => Some(v.clone()),
+        None => None,
+    };
 
-    fn received_new_data(&mut self, received_data: LocationsSnapshot) {
-        let current_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis()
-            .to_string();
-        self.insert(current_time, received_data);
-    }
+    writer.location_update(user_id, LocationSnapshot {})
 }
 
-type LocationsSnapshot = HashMap<String, LocationSnapshot>;
-impl InitializeFile for LocationsSnapshot {
-    fn init() -> Self {
-        HashMap::new()
-    }
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug)]
-struct LocationSnapshot {
-    latitude: String,
-    longitude: String,
-    address: Option<String>,
-}
-struct LocationWriter<'a> {
-    file: ManagedDirectory<'a>,
-}
-
-impl<'a> LocationWriter<'a> {
-    pub fn new(directory: &'a Path, duration: Duration) -> LocationWriter {
-        LocationWriter {
-            file: ManagedDirectory::new(directory, duration),
+fn is_at_place(config: &State<Config>, lat: f64, long: f64) -> ServerResult<Option<&Place>> {
+    let current_location = Location::new(lat, long);
+    for place in config.places.iter() {
+        if current_location.is_in_circle(
+            &Location::new(place.lat, place.long),
+            Distance::from_meters(place.radius),
+        )? {
+            return Ok(Some(place));
         }
     }
 
-    pub async fn location_update(
-        &self,
-        user_id: String,
-        location_snapshot: LocationSnapshot,
-    ) -> FileResult<()> {
-        let newest_file = self.file.read_latest_file::<LocationFile>().await?;
-        let mut current_file = self.file.read_current_file::<LocationFile>().await?;
-        let mut updated_data: LocationsSnapshot;
-        match newest_file {
-            Some((_, newest_file)) => match newest_file.get_latest_data()? {
-                Some(newest_data) => {
-                    updated_data = newest_data.clone();
-                    updated_data.insert(user_id, location_snapshot);
-                }
-                None => {
-                    updated_data = LocationsSnapshot::init();
-                    updated_data.insert(user_id, location_snapshot);
-                }
-            },
-            None => {
-                updated_data = LocationsSnapshot::init();
-                updated_data.insert(user_id, location_snapshot);
-            }
-        }
-
-        current_file.1.insert(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_millis()
-                .to_string(),
-            updated_data,
-        );
-
-        self.file.write_file(current_file.0, current_file).await
-    }
-}
-
-struct ManagedDirectory<'a> {
-    directory: &'a Path,
-    duration: Duration,
-}
-
-impl<'a> ManagedDirectory<'a> {
-    pub fn new(directory: &'a Path, duration: Duration) -> ManagedDirectory {
-        ManagedDirectory {
-            directory,
-            duration,
-        }
-    }
-
-    pub async fn read_latest_file<T>(&self) -> FileResult<Option<(u64, T)>>
-    where
-        T: DeserializeOwned,
-    {
-        let newest_file = self.get_newest_file().await?;
-        Ok(match newest_file {
-            Some((file_time, path)) => Some((file_time, ManagedDirectory::read_file(path).await?)),
-            None => None,
-        })
-    }
-
-    async fn read_file<T>(path: PathBuf) -> FileResult<T>
-    where
-        T: DeserializeOwned,
-    {
-        let mut content = String::new();
-        TokioFile::open(path)
-            .await?
-            .read_to_string(&mut content)
-            .await?;
-        Ok(serde_json::from_str(&content)?)
-    }
-
-    pub async fn read_current_file<T>(&self) -> FileResult<(u64, T)>
-    where
-        T: DeserializeOwned + InitializeFile,
-    {
-        let newest_file = self.get_newest_file().await?;
-        match newest_file {
-            Some((time, path)) => {
-                if (SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
-                    - Duration::from_millis(time))
-                    < self.duration
-                {
-                    Ok((time, ManagedDirectory::read_file(path).await?))
-                } else {
-                    Ok((
-                        SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap()
-                            .as_millis() as u64,
-                        T::init(),
-                    ))
-                }
-            }
-            None => Ok((
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64,
-                T::init(),
-            )),
-        }
-    }
-
-    async fn get_newest_file(&self) -> FileResult<Option<(u64, PathBuf)>> {
-        let mut newest = None;
-        let mut location_files = fs::read_dir(self.directory).await?;
-        while let Some(loc_file) = location_files.next_entry().await? {
-            match loc_file.file_name().into_string()?.split(".").next() {
-                Some(file_name) => match file_name.parse::<u64>() {
-                    Ok(number) => match newest {
-                        Some((current_number, _)) => {
-                            if current_number < number {
-                                newest = Some((number, loc_file));
-                            }
-                        }
-                        None => {
-                            newest = Some((number, loc_file));
-                        }
-                    },
-                    _ => {}
-                },
-                _ => {}
-            }
-        }
-
-        Ok(match newest {
-            Some((time, dir_entry)) => Some((time, dir_entry.path())),
-            None => None,
-        })
-    }
-
-    async fn write_file<T>(&self, time: u64, data: T) -> FileResult<()>
-    where
-        T: Serialize,
-    {
-        let mut new_path = PathBuf::from(self.directory);
-        new_path = new_path.join(format!("{}.json", time));
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(new_path)
-            .await?;
-        file.write_all(serde_json::to_string(&data)?.as_bytes());
-        Ok(())
-    }
+    Ok(None)
 }
