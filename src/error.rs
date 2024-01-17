@@ -69,7 +69,7 @@ impl fmt::Display for ConfigError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ConfigError::ReadFileError(v) => {
-                write!(f, "Unable to read file: {}", v)
+                write!(f, "Unable to read config file: {}", v)
             }
             ConfigError::TomlParseError(v) => {
                 write!(f, "Unable to parse Toml: {}", v)

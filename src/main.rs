@@ -13,14 +13,22 @@ use rocket::http::Status;
 use rocket::{get, routes, State};
 use std::path::Path;
 
-#[tokio::main]
+#[rocket::main]
 async fn main() {
+    let config = match Config::load().await {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
+    };
+
     rocket::build()
         .manage(LocationWriter::new(
             Path::new("example/locations"),
             std::time::Duration::from_secs(1000 * 60 * 60 * 12),
         ))
-        .manage(Config::load().await.unwrap())
+        .manage(config)
         .mount("/", routes![location_update])
         .launch()
         .await
@@ -33,7 +41,7 @@ async fn location_update(
     user_id: &str,
     lat: f64,
     long: f64,
-    writer: &State<LocationWriter>,
+    writer: &State<LocationWriter<'_>>,
     config: &State<Config>,
 ) -> Status {
     if pwd != config.password {
@@ -43,7 +51,10 @@ async fn location_update(
     let place = match is_at_place(config, lat.clone(), long.clone()) {
         Ok(v) => v,
         Err(e) => {
-            println!("Server error occurred: {}", e);
+            println!(
+                "A server error occurred while figuring out if there were any nearby places: {}",
+                e
+            );
             return Status::InternalServerError;
         }
     };
@@ -53,7 +64,21 @@ async fn location_update(
         None => None,
     };
 
-    writer.location_update(user_id, LocationSnapshot {})
+    match writer
+        .location_update(
+            String::from(user_id),
+            LocationSnapshot::new(lat, long, place),
+        )
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            println!("A file_error occurred while writing a new location: {}", e);
+            return Status::InternalServerError;
+        }
+    }
+
+    Status::Ok
 }
 
 fn is_at_place(config: &State<Config>, lat: f64, long: f64) -> ServerResult<Option<&Place>> {

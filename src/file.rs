@@ -18,7 +18,7 @@ use {
     },
 };
 
-trait InitializeFile {
+pub trait InitializeFile {
     fn init() -> Self;
 }
 
@@ -245,12 +245,9 @@ impl<'a> ManagedDirectory<'a> {
     {
         let mut new_path = PathBuf::from(self.directory);
         new_path = new_path.join(format!("{}.json", time));
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(new_path)
+        let mut file = TokioFile::create(new_path).await?;
+        file.write_all(serde_json::to_string(&data)?.as_bytes())
             .await?;
-        file.write_all(serde_json::to_string(&data)?.as_bytes());
         Ok(())
     }
 }

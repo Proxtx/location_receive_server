@@ -19,3 +19,6 @@ Cargo.lock
 /target
 
 example/*
+
+config.toml
+1704497913143.json
