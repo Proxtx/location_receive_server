@@ -7,6 +7,7 @@ pub enum FileError {
     DeserializationError(serde_json::Error),
     IoError(std::io::Error),
     FileNameError(std::ffi::OsString),
+    ParseIntError(std::num::ParseIntError),
 }
 
 impl Error for FileError {}
@@ -22,6 +23,9 @@ impl fmt::Display for FileError {
             }
             FileError::FileNameError(v) => {
                 write!(f, "Was unable to read the os string: {:?}", v)
+            }
+            FileError::ParseIntError(v) => {
+                write!(f, "Was unable to parse string to int: {:?}", v)
             }
         }
     }
@@ -42,5 +46,11 @@ impl From<std::io::Error> for FileError {
 impl From<std::ffi::OsString> for FileError {
     fn from(value: std::ffi::OsString) -> Self {
         FileError::FileNameError(value)
+    }
+}
+
+impl From<std::num::ParseIntError> for FileError {
+    fn from(value: std::num::ParseIntError) -> Self {
+        FileError::ParseIntError(value)
     }
 }
