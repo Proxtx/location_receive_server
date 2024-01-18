@@ -1,20 +1,34 @@
 use tokio::io::AsyncReadExt;
 
-use {crate::error::ConfigResult, serde::Deserialize, std::path::PathBuf, tokio::fs::File};
+use {
+    crate::error::ConfigResult,
+    serde::Deserialize,
+    std::{collections::HashMap, path::PathBuf},
+    tokio::fs::File,
+};
 
 #[derive(Deserialize, Clone)]
 pub struct Place {
     pub lat: f64,
     pub long: f64,
     pub radius: u8,
-    pub name: String,
+    pub name: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct Config {
     pub password: String,
-    pub places: Vec<Place>,
+    pub file_duration: u64,
+    pub places: HashMap<String, Place>,
     pub file_locations: FileLocations,
+    pub users: HashMap<String, User>,
+}
+
+#[derive(Deserialize)]
+pub struct User {
+    pub first_name: String,
+    pub last_name: String,
+    pub avatar: String,
 }
 
 #[derive(Deserialize)]
