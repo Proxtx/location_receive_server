@@ -289,7 +289,6 @@ impl ManagedDirectory {
         match newest_file {
             Some((time, path)) => {
                 if current_time - Duration::from_millis(time) < self.duration {
-                    println!("The same file case is active");
                     Ok((time, ManagedDirectory::read_file(path).await?))
                 } else {
                     Ok((current_time.as_millis() as u64, T::init()))
