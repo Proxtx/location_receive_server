@@ -94,6 +94,40 @@ impl LocationSnapshot {
         }
     }
 }
+
+type UserDataFile = HashMap<String, UsersDataSnapshot>;
+type UsersDataSnapshot = HashMap<String, UserDataSnapshot>;
+
+#[derive(Serialize, Deserialize)]
+struct UserDataSnapshot {
+    location: UserDataSnapshotLocation,
+    avatar: String,
+    #[serde(rename = "firstName")]
+    first_name: String,
+    #[serde(rename = "lastName")]
+    last_name: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct UserDataSnapshotLocation {
+    latitude: String,
+    longitude: String,
+    address: Option<String>,
+    battery: u8,
+}
+
+struct UserDataWriter<'a> {
+    file: ManagedDirectory<'a>,
+}
+
+impl<'a> UserDataWriter<'a> {
+    pub fn new(directory: &'a Path, duration: Duration) -> UserDataWriter {
+        UserDataWriter {
+            file: ManagedDirectory::new(directory, duration),
+        }
+    }
+}
+
 pub struct LocationWriter<'a> {
     file: ManagedDirectory<'a>,
 }
