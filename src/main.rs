@@ -17,8 +17,8 @@ use rocket::http::Status;
 use rocket::{get, routes, State};
 use std::time::Duration;
 
-#[rocket::main]
-async fn main() {
+#[rocket::launch]
+async fn rocket() -> _ {
     let config = match Config::load().await {
         Ok(v) => v,
         Err(e) => {
@@ -26,8 +26,8 @@ async fn main() {
             std::process::exit(1);
         }
     };
-
-    rocket::build()
+    let figment = rocket::Config::figment().merge(("port", config.port));
+    rocket::custom(figment)
         .manage(LocationWriter::new(
             config.file_locations.location.clone(),
             std::time::Duration::from_millis(1000 * 60 * 60 * 12),
@@ -38,9 +38,6 @@ async fn main() {
         ))
         .manage(config)
         .mount("/", routes![location_update, data_update])
-        .launch()
-        .await
-        .unwrap();
 }
 
 #[get("/data-update/<pwd>/<user_id>/<lat>/<long>/<battery>")]

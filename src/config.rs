@@ -18,6 +18,7 @@ pub struct Place {
 #[derive(Deserialize)]
 pub struct Config {
     pub password: String,
+    pub port: u16,
     pub file_duration: u64,
     pub places: HashMap<String, Place>,
     pub file_locations: FileLocations,
