@@ -1,10 +1,8 @@
-use tokio::io::AsyncReadExt;
-
 use {
     crate::error::ConfigResult,
     serde::Deserialize,
     std::{collections::HashMap, path::PathBuf},
-    tokio::fs::File,
+    tokio::{fs::File, io::AsyncReadExt},
 };
 
 #[derive(Deserialize, Clone)]

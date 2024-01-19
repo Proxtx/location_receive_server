@@ -1,23 +1,17 @@
-use std::time::UNIX_EPOCH;
-
-use serde::Serialize;
-use tokio::io::AsyncWriteExt;
-
 use {
     crate::{
         config::{Place, User},
         error::FileResult,
     },
-    serde::de::DeserializeOwned,
-    serde::Deserialize,
+    serde::{de::DeserializeOwned, Deserialize, Serialize},
     std::{
         collections::HashMap,
         path::PathBuf,
-        time::{Duration, SystemTime},
+        time::{Duration, SystemTime, UNIX_EPOCH},
     },
     tokio::{
         fs::{self, File as TokioFile},
-        io::AsyncReadExt,
+        io::{AsyncReadExt, AsyncWriteExt},
     },
 };
 

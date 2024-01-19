@@ -2,20 +2,14 @@ mod config;
 mod error;
 mod file;
 
-use config::Config;
-use config::Place;
-use config::User;
-use error::ServerResult;
-use file::LocationSnapshot;
-use file::LocationWriter;
-use file::UserDataSnapshot;
-use file::UserDataSnapshotLocation;
-use file::UserDataWriter;
-use geoutils::Distance;
-use geoutils::Location;
-use rocket::http::Status;
-use rocket::{get, routes, State};
-use std::time::Duration;
+use {
+    config::{Config, Place, User},
+    error::ServerResult,
+    file::{LocationSnapshot, LocationWriter, UserDataSnapshot, UserDataSnapshotLocation, UserDataWriter},
+    geoutils::{Distance,Location},
+    rocket::{http::Status, get, routes, State},
+    std::time::Duration
+};
 
 #[rocket::launch]
 async fn rocket() -> _ {
