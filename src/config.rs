@@ -21,6 +21,13 @@ pub struct Config {
     pub places: HashMap<String, Place>,
     pub file_locations: FileLocations,
     pub users: HashMap<String, User>,
+    pub hooks: Option<Vec<Hook>>,
+}
+
+#[derive(Deserialize)]
+pub struct Hook {
+    place: String,
+    command: String,
 }
 
 #[derive(Deserialize)]
