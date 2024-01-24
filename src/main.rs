@@ -5,10 +5,13 @@ mod file;
 use {
     config::{Config, Place, User},
     error::ServerResult,
-    file::{LocationSnapshot, LocationWriter, UserDataSnapshot, UserDataSnapshotLocation, UserDataWriter},
-    geoutils::{Distance,Location},
-    rocket::{http::Status, get, routes, State},
-    std::time::Duration
+    file::{
+        LocationSnapshot, LocationWriter, UserDataSnapshot, UserDataSnapshotLocation,
+        UserDataWriter,
+    },
+    geoutils::{Distance, Location},
+    rocket::{get, http::Status, routes, State},
+    std::{process::Command, time::Duration},
 };
 
 #[rocket::launch]
@@ -119,6 +122,34 @@ async fn location_update(
             return Status::InternalServerError;
         }
     };
+
+    match (&config.hooks, &place) {
+        (Some(hooks), Some(place)) => {
+            match hooks
+                .iter()
+                .find(|e| &e.place == place.name.as_ref().unwrap())
+            {
+                Some(elem) => {
+                    let mut split = elem.command.split(" ");
+                    let first = match split.next() {
+                        Some(v) => v,
+                        None => {
+                            println!("A server error occurred while running a command while being at a place: Failed to parse the command: No program provided");
+                            return Status::InternalServerError;
+                        }
+                    };
+                    match Command::new(first).args(split.collect::<Vec<_>>()).spawn() {
+                        Err(e) => {
+                            println!("A server error occurred while running a command while being at a place: stderr: {}", e)
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
 
     match writer
         .location_update(

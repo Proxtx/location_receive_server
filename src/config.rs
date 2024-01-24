@@ -26,8 +26,8 @@ pub struct Config {
 
 #[derive(Deserialize)]
 pub struct Hook {
-    place: String,
-    command: String,
+    pub place: String,
+    pub command: String,
 }
 
 #[derive(Deserialize)]
