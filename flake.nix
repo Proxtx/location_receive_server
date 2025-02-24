@@ -2,30 +2,26 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    crane.url = "github:ipetkov/crane";
   };
 
-  outputs = {self, nixpkgs, flake-utils}:
-    flake-utils.lib.eachDefaultSystem(system: {
-        packages.default = nixpkgs.legacyPackages.${system}.rustPlatform.buildRustPackage {
-          pname = "location_receive_server";
-          version = "0.1.0";
-          src = ./.;
-
-          cargoLock = {
-            lockFile = ./Cargo.lock;
-          };
-  
-          nativeBuildInputs = [];
-          buildInputs = [];
+  outputs = {self, nixpkgs, flake-utils, crane}:
+    flake-utils.lib.eachDefaultSystem(system: 
+      let 
+        pkgs = nixpkgs.legacyPackages.${system};
+        craneLib = crane.mkLib pkgs;
+      in {
+        packages.default = craneLib.buildPackage {
+          src = craneLib.cleanCargoSource ./.;
         };
-    }) // {
+      }) // {
       nixosModules.default = {config, lib, pkgs, ...} : {
         options.services.location_receive_server = {
           enable = pkgs.lib.mkEnableOption "Location Receive Server";
           config = lib.mkOption {
-            type = lib.types.string;
-            default = "";
-            description = "Configuration for the Location Receive Server";
+            type = lib.types.attrs;
+            default = {};
+            description = "Configuration for the Location Receive Server.";
           };
           data_dir = lib.mkOption {
             type = lib.types.path;
@@ -52,14 +48,10 @@
             };
           };
 
-          #system.activationScripts.copyConfigLocationReceiveServer = ''
-          #  cat <<EOF > ${config.services.location_receive_server.data_dir}/config.toml
-          #  ${config.services.location_receive_server.config}
-          #  EOF
-          #'';
-
           system.activationScripts.copyConfigLocationReceiveServer = ''
-            echo ${config.services.location_receive_server.config} >> ${config.services.location_receive_server.data_dir}/config.toml
+            cp ${(pkgs.formats.toml {}).generate "location_receive_server_config" config.services.location_receive_server.config} ${config.services.location_receive_server.data_dir}/config.toml
+            mkdir -p ${config.services.location_receive_server.data_dir}/locations
+            mkdir -p ${config.services.location_receive_server.data_dir}/data
           '';
 
           systemd.services.location_receive_server = {
