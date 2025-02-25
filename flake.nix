@@ -52,7 +52,7 @@
             cp ${(pkgs.formats.toml {}).generate "location_receive_server_config" config.services.location_receive_server.config} ${config.services.location_receive_server.data_dir}/config.toml
             mkdir -p ${config.services.location_receive_server.data_dir}/locations
             mkdir -p ${config.services.location_receive_server.data_dir}/data
-            chowm -R location_receive_server:location_receive_server ${config.services.location_receive_server.data_dir}
+            chown -R location_receive_server:location_receive_server ${config.services.location_receive_server.data_dir}
           '';
 
           systemd.services.location_receive_server = {
